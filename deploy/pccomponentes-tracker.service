@@ -1,0 +1,34 @@
+[Unit]
+Description=PcComponentes Price Tracker (Flask + Discord bot + APScheduler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pctracker
+Group=pctracker
+WorkingDirectory=/opt/pccomponentes-tracker
+EnvironmentFile=/opt/pccomponentes-tracker/.env
+ExecStart=/opt/pccomponentes-tracker/venv/bin/python /opt/pccomponentes-tracker/run.py
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pccomponentes-tracker/data /opt/pccomponentes-tracker/logs
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target
