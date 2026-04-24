@@ -8,7 +8,7 @@ from typing import Callable, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from . import db, scraper
+from . import db, scraper, webpush
 from .notifier import PriceDrop
 
 log = logging.getLogger(__name__)
@@ -34,6 +34,36 @@ def _notify_on_stock_change() -> bool:
     return os.environ.get("NOTIFY_ON_STOCK_CHANGE", "true").lower() in {"1", "true", "yes", "on"}
 
 
+def _fan_out_webpush(drop: PriceDrop) -> None:
+    """Send a push to every subscribed browser."""
+    subs = db.list_push_subscriptions()
+    if not subs:
+        return
+
+    payload = {
+        "title": "¡Bajada de precio!" if drop.delta > 0 else "De nuevo disponible",
+        "body": f"{drop.name[:80]} — {drop.new_price:.2f} €"
+                + (f" (antes {drop.previous_price:.2f} €)" if drop.delta > 0 else ""),
+        "icon": drop.image_url or "",
+        "url": f"/product/{drop.product_id}",
+        "tag": f"product-{drop.product_id}",
+        "is_new_low": drop.is_new_low,
+    }
+
+    for row in subs:
+        sub_info = {
+            "endpoint": row["endpoint"],
+            "keys": {"p256dh": row["p256dh"], "auth": row["auth"]},
+        }
+        try:
+            webpush.send(sub_info, payload)
+        except webpush.SubscriptionGone:
+            log.info("pruning dead push subscription: %s", row["endpoint"][:60])
+            db.delete_push_subscription(row["endpoint"])
+        except Exception:
+            log.exception("webpush fan-out error")
+
+
 def check_all() -> None:
     products = db.list_products()
     log.info("scheduler: checking %d products", len(products))
@@ -52,10 +82,9 @@ def check_all() -> None:
         prev_status = p["last_status"]
         db.record_price(p["id"], scraped.price, scraped.in_stock)
 
-        if _drop_callback is None:
-            continue
+        drop: PriceDrop | None = None
 
-        # Notify on price drop
+        # Price drop
         if prev_price is not None and scraped.price < prev_price:
             delta = prev_price - scraped.price
             pct = (delta / prev_price) * 100.0 if prev_price > 0 else 0.0
@@ -71,13 +100,9 @@ def check_all() -> None:
                     lowest_ever=db.lowest_price(p["id"]),
                     in_stock=scraped.in_stock,
                 )
-                try:
-                    _drop_callback(drop)
-                except Exception:
-                    log.exception("drop_callback failed")
 
-        # Notify when product comes back in stock
-        if notify_stock and prev_status == "out_of_stock" and scraped.in_stock:
+        # Restock event
+        elif notify_stock and prev_status == "out_of_stock" and scraped.in_stock:
             drop = PriceDrop(
                 product_id=p["id"],
                 url=p["url"],
@@ -88,10 +113,27 @@ def check_all() -> None:
                 lowest_ever=db.lowest_price(p["id"]),
                 in_stock=True,
             )
+
+        if drop is not None:
+            # Persist event so the website can show a badge / recent drops feed.
             try:
-                _drop_callback(drop)
+                db.record_drop_event(
+                    drop.product_id, drop.previous_price, drop.new_price,
+                    drop.percent, drop.is_new_low, drop.in_stock,
+                )
             except Exception:
-                log.exception("drop_callback (restock) failed")
+                log.exception("failed to persist drop event")
+
+            # Fan-out: Discord bot (if registered) and Web Push subscribers.
+            if _drop_callback is not None:
+                try:
+                    _drop_callback(drop)
+                except Exception:
+                    log.exception("drop_callback failed")
+            try:
+                _fan_out_webpush(drop)
+            except Exception:
+                log.exception("webpush fan-out failed")
 
 
 def start() -> BackgroundScheduler:

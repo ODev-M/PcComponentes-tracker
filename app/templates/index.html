@@ -2,75 +2,154 @@
 {% block content %}
 
 <section class="mb-10">
-    <h1 class="text-3xl font-bold tracking-tight">Productos rastreados</h1>
-    <p class="text-slate-400 mt-2 text-sm">Pega una URL de PcComponentes y recibirás un aviso en Discord cuando baje el precio.</p>
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+            <h1 class="text-3xl font-bold tracking-tight">Productos rastreados</h1>
+            <p class="text-slate-400 mt-2 text-sm max-w-xl">
+                Pega una URL de PcComponentes. Revisamos el precio cada hora y te avisamos en Discord y en el navegador cuando baje.
+            </p>
+        </div>
+        <button id="enable-push" class="hidden text-xs bg-ink-800 hover:bg-ink-700 border border-white/10 text-slate-200 rounded-lg px-3 py-2 font-medium inline-flex items-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span id="push-btn-label">Activar notificaciones</span>
+        </button>
+    </div>
 </section>
 
 <form id="add-form" class="bg-ink-900/70 border border-white/5 rounded-2xl p-4 shadow-card mb-10 flex flex-col sm:flex-row gap-3">
-    <input
-        id="url-input"
-        name="url"
-        type="url"
-        required
+    <input id="url-input" name="url" type="url" required
         placeholder="https://www.pccomponentes.com/..."
-        class="flex-1 bg-ink-800 border border-white/5 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-accent-500/60 focus:ring-2 focus:ring-accent-500/20 placeholder:text-slate-600"
-    >
-    <input
-        id="target-input"
-        name="target_price"
-        type="number" step="0.01" min="0"
+        class="flex-1 bg-ink-800 border border-white/5 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-accent-500/60 focus:ring-2 focus:ring-accent-500/20 placeholder:text-slate-600">
+    <input id="target-input" name="target_price" type="number" step="0.01" min="0"
         placeholder="Precio objetivo (opt.)"
-        class="sm:w-48 bg-ink-800 border border-white/5 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-accent-500/60 focus:ring-2 focus:ring-accent-500/20 placeholder:text-slate-600"
-    >
+        class="sm:w-48 bg-ink-800 border border-white/5 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-accent-500/60 focus:ring-2 focus:ring-accent-500/20 placeholder:text-slate-600">
     <button type="submit"
         class="bg-accent-500 hover:bg-accent-400 transition-colors text-white rounded-xl px-5 py-2.5 text-sm font-medium shadow-lg shadow-accent-500/20">
         Añadir
     </button>
 </form>
 
+{# --------------------------------------------------------------------- #}
+{# Highlights                                                              #}
+{# --------------------------------------------------------------------- #}
+{% set has_highlights = highlights.lows or highlights.drops or highlights.near_target %}
+{% if has_highlights %}
+<section class="mb-10 space-y-8">
+
+    {% if highlights.lows %}
+    <div>
+        <header class="flex items-baseline justify-between mb-3">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                <span>🏆</span> Mínimo histórico
+            </h2>
+            <span class="text-[11px] text-slate-500">precio más bajo jamás visto</span>
+        </header>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for p in highlights.lows %}
+                {% include "_product_card.html" %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if highlights.drops %}
+    <div>
+        <header class="flex items-baseline justify-between mb-3">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-red-400 flex items-center gap-2">
+                <span>🔥</span> Mayores bajadas (30 días)
+            </h2>
+        </header>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for p in highlights.drops %}
+                {% include "_product_card.html" %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if highlights.near_target %}
+    <div>
+        <header class="flex items-baseline justify-between mb-3">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-accent-400 flex items-center gap-2">
+                <span>🎯</span> En precio objetivo
+            </h2>
+        </header>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for p in highlights.near_target %}
+                {% include "_product_card.html" %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</section>
+{% endif %}
+
+{# --------------------------------------------------------------------- #}
+{# All products + category filter                                          #}
+{# --------------------------------------------------------------------- #}
 {% if products %}
-<div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {% for p in products %}
-    <article class="group relative bg-ink-900/70 border border-white/5 rounded-2xl p-4 shadow-card hover:border-white/10 transition-all">
-        <a href="{{ url_for('main.product_page', product_id=p.id) }}" class="flex gap-4">
-            <div class="w-20 h-20 rounded-xl bg-ink-800 grid place-items-center overflow-hidden flex-shrink-0 border border-white/5">
-                {% if p.image_url %}
-                    <img src="{{ p.image_url }}" alt="" loading="lazy" class="w-full h-full object-contain">
-                {% else %}
-                    <svg class="w-8 h-8 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
-                {% endif %}
-            </div>
-            <div class="flex-1 min-w-0">
-                <div class="text-[11px] uppercase tracking-widest text-slate-500">#{{ p.id }}</div>
-                <h2 class="font-semibold text-sm leading-snug line-clamp-2 group-hover:text-accent-400 transition-colors mt-1">{{ p.name }}</h2>
-                <div class="flex items-baseline gap-2 mt-2">
-                    <span class="font-mono text-lg font-semibold tabular-nums">
-                        {% if p.last_price is not none %}{{ '%.2f'|format(p.last_price) }} €{% else %}—{% endif %}
-                    </span>
-                    {% if p.target_price %}
-                        <span class="text-[10px] uppercase tracking-wider text-slate-500">obj {{ '%.2f'|format(p.target_price) }} €</span>
+<section>
+    <header class="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <h2 class="text-lg font-semibold">Todos los productos</h2>
+        <div id="category-tabs" class="flex flex-wrap gap-1.5">
+            <button class="cat-chip active" data-slug="all">
+                <span class="opacity-70">✨</span> Todos
+                <span class="cat-count">{{ products|length }}</span>
+            </button>
+            {% for c in categories %}
+            <button class="cat-chip" data-slug="{{ c.slug }}">
+                <span class="opacity-70">{{ c.icon }}</span> {{ c.label }}
+                <span class="cat-count">{{ c.count }}</span>
+            </button>
+            {% endfor %}
+        </div>
+    </header>
+
+    <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for p in products %}
+        <article class="product-item group relative bg-ink-900/70 border border-white/5 rounded-2xl p-4 shadow-card hover:border-white/10 transition-all"
+                 data-category="{{ p.category }}">
+            <a href="{{ url_for('main.product_page', product_id=p.id) }}" class="flex gap-4">
+                <div class="w-20 h-20 rounded-xl bg-ink-800 grid place-items-center overflow-hidden flex-shrink-0 border border-white/5">
+                    {% if p.image_url %}
+                        <img src="{{ p.image_url }}" alt="" loading="lazy" class="w-full h-full object-contain">
+                    {% else %}
+                        <svg class="w-8 h-8 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
                     {% endif %}
                 </div>
-            </div>
-        </a>
-        <button
-            type="button"
-            class="delete-btn opacity-0 group-hover:opacity-100 absolute top-3 right-3 w-7 h-7 rounded-lg bg-ink-800 hover:bg-red-500/20 hover:text-red-400 text-slate-500 transition-all grid place-items-center"
-            data-id="{{ p.id }}"
-            title="Eliminar"
-        >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-    </article>
-    {% endfor %}
-</div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 text-[11px] uppercase tracking-widest text-slate-500">
+                        <span>#{{ p.id }}</span>
+                        <span class="text-slate-700">·</span>
+                        <span class="text-slate-400">{{ p.category_icon }} {{ p.category_label }}</span>
+                    </div>
+                    <h2 class="font-semibold text-sm leading-snug line-clamp-2 group-hover:text-accent-400 transition-colors mt-1">{{ p.name }}</h2>
+                    <div class="flex items-baseline gap-2 mt-2">
+                        <span class="font-mono text-lg font-semibold tabular-nums">
+                            {% if p.last_price is not none %}{{ '%.2f'|format(p.last_price) }} €{% else %}—{% endif %}
+                        </span>
+                        {% if p.target_price %}
+                            <span class="text-[10px] uppercase tracking-wider text-slate-500">obj {{ '%.2f'|format(p.target_price) }} €</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+            <button type="button" class="delete-btn opacity-0 group-hover:opacity-100 absolute top-3 right-3 w-7 h-7 rounded-lg bg-ink-800 hover:bg-red-500/20 hover:text-red-400 text-slate-500 transition-all grid place-items-center"
+                data-id="{{ p.id }}" title="Eliminar">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </article>
+        {% endfor %}
+    </div>
+</section>
 {% else %}
 <div class="text-center py-20 border border-dashed border-white/5 rounded-2xl">
     <div class="w-12 h-12 mx-auto rounded-full bg-ink-800 grid place-items-center mb-4">
         <svg class="w-6 h-6 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
     </div>
-    <p class="text-slate-400 text-sm">Aún no rastreas ningún producto.</p>
-    <p class="text-slate-600 text-xs mt-1">Añade tu primera URL arriba.</p>
+    <p class="text-slate-400 text-sm">Aún no se rastrea ningún producto.</p>
+    <p class="text-slate-600 text-xs mt-1">Añade la primera URL arriba.</p>
 </div>
 {% endif %}
 
